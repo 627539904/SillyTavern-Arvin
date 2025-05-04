@@ -298,7 +298,7 @@ export {
     isOdd,
     countOccurrences,
     renderTemplate,
-    swipe_right
+    swipe_right,
 };
 
 /**
