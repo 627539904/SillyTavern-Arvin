@@ -103,7 +103,7 @@ if %errorlevel% neq 0 (
 echo Installing npm packages and starting server
 set NODE_ENV=production
 call npm install --no-audit --no-fund --loglevel=error --no-progress --omit=dev
-node server.js %*
+node server.js --listen %*
 
 :end
 pause
