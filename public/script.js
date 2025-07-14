@@ -3728,6 +3728,7 @@ function removeLastMessage() {
  */
 export async function Generate(type, { automatic_trigger, force_name2, quiet_prompt, quietToLoud, skipWIAN, force_chid, signal, quietImage, quietName, depth = 0 } = {}, dryRun = false) {
     console.log('Generate entered');
+    console.log('【Debug-TTS】Generate entered');
     setGenerationProgress(0);
     generation_started = new Date();
 

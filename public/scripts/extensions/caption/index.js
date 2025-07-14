@@ -155,6 +155,7 @@ async function captionExistingMessage(data) {
  * @param {string} image Image URL
  */
 async function sendCaptionedMessage(caption, image) {
+    console.log('【Debug-TTS】 sendCaptionedMessage', {caption, image});
     const messageText = await wrapCaptionTemplate(caption);
 
     const context = getContext();

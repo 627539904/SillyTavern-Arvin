@@ -3312,6 +3312,7 @@ function findPersonaByName(name) {
 }
 
 async function sendUserMessageCallback(args, text) {
+    console.log('【Debug-TTS】 sendUserMessageCallback', {args, text});
     text = String(text ?? '').trim();
     const compact = isTrueBoolean(args?.compact);
     const bias = extractMessageBias(text);
@@ -3554,6 +3555,7 @@ export function getNameAndAvatarForMessage(character, name = null) {
 }
 
 export async function sendMessageAs(args, text) {
+    console.log('【Debug-TTS】 sendMessageAs', {args, text});
     let name = args.name?.trim();
 
     if (!name) {
@@ -3643,6 +3645,7 @@ export async function sendMessageAs(args, text) {
 }
 
 export async function sendNarratorMessage(args, text) {
+    console.log('【Debug-TTS】 sendNarratorMessage', {args, text});
     text = String(text ?? '');
     const name = chat_metadata[NARRATOR_NAME_KEY] || NARRATOR_NAME_DEFAULT;
     // Messages that do nothing but set bias will be hidden from the context

@@ -28,6 +28,7 @@ import { enumIcons } from '../../slash-commands/SlashCommandCommonEnumsProvider.
 import { POPUP_TYPE, callGenericPopup } from '../../popup.js';
 import { GoogleTranslateTtsProvider } from './google-translate.js';
 import { KokoroTtsProvider } from './kokoro.js';
+import { GptSovitsV1Provider } from './gpt-sovits-v1.js';
 
 const UPDATE_INTERVAL = 1000;
 const wrapper = new ModuleWorkerWrapper(moduleWorker);
@@ -95,6 +96,7 @@ const ttsProviders = {
     'Google Translate': GoogleTranslateTtsProvider,
     GSVI: GSVITtsProvider,
     'GPT-SoVITS-V2 (Unofficial)': GptSovitsV2Provider,
+    'GPT-SoVITS': GptSovitsV1Provider,
     Kokoro: KokoroTtsProvider,
     Novel: NovelTtsProvider,
     OpenAI: OpenAITtsProvider,
@@ -208,6 +210,7 @@ function isTtsProcessing() {
  * @returns {void}
  */
 function processAndQueueTtsMessage(message) {
+    console.log('【Debug-TTS】 processAndQueueTtsMessage', message);
     if (!extension_settings.tts.narrate_by_paragraphs) {
         ttsJobQueue.push(message);
         return;
@@ -460,8 +463,7 @@ async function processTtsQueue() {
     if (currentTtsJob || ttsJobQueue.length <= 0 || audioPaused) {
         return;
     }
-
-    console.debug('New message found, running TTS');
+    console.log('【Debug-TTS】 processTtsQueue, new job:', ttsJobQueue[0]);
     currentTtsJob = ttsJobQueue.shift();
     let text = extension_settings.tts.narrate_translated_only ? (currentTtsJob?.extra?.display_text || currentTtsJob.mes) : currentTtsJob.mes;
 
@@ -516,13 +518,31 @@ async function processTtsQueue() {
             completeTtsJob();
             return;
         }
+        // const voiceMapEntry = voiceMap[char] === DEFAULT_VOICE_MARKER ? voiceMap[DEFAULT_VOICE_MARKER] : voiceMap[char]; //原始代码
 
-        const voiceMapEntry = voiceMap[char] === DEFAULT_VOICE_MARKER ? voiceMap[DEFAULT_VOICE_MARKER] : voiceMap[char];
-
+        // Debug日志：当前voiceMap和char
+        console.log('【Debug-TTS】 processTtsQueue voiceMap', {voiceMap, char});
+        let voiceMapEntry = voiceMap[char];
+        if (!voiceMapEntry || voiceMapEntry === DEFAULT_VOICE_MARKER) {
+            console.log('【Debug-TTS】 角色未配置voice，尝试使用[Default Voice]');
+            voiceMapEntry = voiceMap[DEFAULT_VOICE_MARKER];
+        }
+        if (!voiceMapEntry || voiceMapEntry === DISABLED_VOICE_MARKER) {
+            console.log('【Debug-TTS】 [Default Voice]未配置，尝试使用provider默认voice');
+            // 对于GPT-SoVITS V1，直接用refer_wav_path
+            if (ttsProvider.getVoice) {
+                const fallbackVoice = await ttsProvider.getVoice('default');
+                if (fallbackVoice && fallbackVoice.voice_id) {
+                    voiceMapEntry = fallbackVoice.voice_id;
+                    console.log('【Debug-TTS】 provider默认voice fallback', fallbackVoice);
+                }
+            }
+        }
         if (!voiceMapEntry || voiceMapEntry === DISABLED_VOICE_MARKER) {
             throw `${char} not in voicemap. Configure character in extension settings voice map`;
         }
         const voice = await ttsProvider.getVoice(voiceMapEntry);
+        console.log('【Debug-TTS】 getVoice result', voice);
         const voiceId = voice.voice_id;
         if (voiceId == null) {
             toastr.error(`Specified voice for ${char} was not found. Check the TTS extension settings.`);
@@ -749,45 +769,51 @@ async function onChatChanged() {
 }
 
 async function onMessageEvent(messageId, lastCharIndex) {
-    // If TTS is disabled, do nothing
+    console.log('【Debug-TTS】 onMessageEvent called', { messageId, lastCharIndex, auto_generation: extension_settings.tts.auto_generation, enabled: extension_settings.tts.enabled });
+
     if (!extension_settings.tts.enabled) {
+        console.log('【Debug-TTS】 TTS未启用，return');
         return;
     }
 
-    // Auto generation is disabled
     if (!extension_settings.tts.auto_generation) {
+        console.log('【Debug-TTS】 TTS自动生成未启用，return');
         return;
     }
 
     const context = getContext();
+    const chat = context.chat;
 
     // no characters or group selected
     if (!context.groupId && context.characterId === undefined) {
+        console.log('【Debug-TTS】 未选择角色或群组，return');
         return;
     }
 
     // Chat changed
     if (context.chatId !== lastChatId) {
         lastChatId = context.chatId;
-        lastMessageHash = getStringHash(context.chat[messageId]?.mes ?? '');
+        lastMessageHash = getStringHash(chat[messageId]?.mes ?? '');
 
         // Force to speak on the first message in the new chat
-        if (context.chat.length === 1) {
+        if (chat.length === 1) {
             lastMessageHash = -1;
         }
     }
 
     // clone message object, as things go haywire if message object is altered below (it's passed by reference)
-    const message = structuredClone(context.chat[messageId]);
+    const message = structuredClone(chat[messageId]);
     const hashNew = getStringHash(message?.mes ?? '');
 
     // Ignore prompt-hidden messages
     if (message.is_system) {
+        console.log('【Debug-TTS】 系统消息，return');
         return;
     }
 
     // if no new messages, or same message, or same message hash, do nothing
     if (hashNew === lastMessageHash) {
+        console.log('【Debug-TTS】 消息相同，return');
         return;
     }
 
@@ -815,28 +841,41 @@ async function onMessageEvent(messageId, lastCharIndex) {
 
     // We're currently swiping. Don't generate voice
     if (!message || message.mes === '...' || message.mes === '') {
+        console.log('【Debug-TTS】 消息为空或省略号，return');
         return;
     }
 
     // Don't generate if message doesn't have a display text
     if (extension_settings.tts.narrate_translated_only && !(message?.extra?.display_text)) {
+        console.log('【Debug-TTS】 消息无display_text，return');
         return;
     }
 
     // Don't generate if message is a user message and user message narration is disabled
     if (message.is_user && !extension_settings.tts.narrate_user) {
+        console.log('【Debug-TTS】 用户消息且未开启用户旁白，return');
         return;
     }
 
     // New messages, add new chat to history
     lastMessageHash = hashNew;
     lastChatId = context.chatId;
+    // Don't generate if message is empty
+    if (message.mes && message.mes.trim() === '') {
+        console.log('【Debug-TTS】 消息内容为空，return');
+        return;
+    }
 
-    console.debug(`Adding message from ${message.name} for TTS processing: "${message.mes}"`);
+    // Don't generate if message already has a generation_id
+    if (message.extra && message.extra.generation_id) {
+        console.log('【Debug-TTS】 消息已有generation_id，return');
+        return;
+    }
 
     if (extension_settings.tts.periodic_auto_generation) {
         ttsJobQueue.push(message);
     } else {
+        console.log('【Debug-TTS】 满足所有条件，调用 processAndQueueTtsMessage', { message });
         processAndQueueTtsMessage(message);
     }
 }

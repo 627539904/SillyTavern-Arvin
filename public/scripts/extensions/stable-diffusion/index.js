@@ -3718,6 +3718,7 @@ async function onComfyDeleteWorkflowClick() {
  * @param {string} prefixedPrompt Prompt with an attached specific prefix
  */
 async function sendMessage(prompt, image, generationType, additionalNegativePrefix, initiator, prefixedPrompt) {
+    console.log('【Debug-TTS】 SD sendMessage', {prompt, image, generationType, additionalNegativePrefix, initiator, prefixedPrompt});
     const context = getContext();
     const name = context.groupId ? systemUserName : context.name2;
     const template = extension_settings.sd.prompts[generationMode.MESSAGE] || '{{prompt}}';
