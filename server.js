@@ -62,6 +62,7 @@ import { ensureThumbnailCache } from './src/endpoints/thumbnails.js';
 
 // Routers
 import { router as usersPublicRouter } from './src/endpoints/users-public.js';
+import { router as apiRouter } from './src/endpoints/api.js';
 import { init as statsInit, onExit as statsOnExit } from './src/endpoints/stats.js';
 import { checkForNewContent } from './src/endpoints/content-manager.js';
 import { init as settingsInit } from './src/endpoints/settings.js';
@@ -190,6 +191,10 @@ if (!cliArgs.disableCsrf) {
     csrfSyncProtection.invalidCsrfTokenError.message = color.red('Invalid CSRF token. Please refresh the page and try again.');
     csrfSyncProtection.invalidCsrfTokenError.stack = undefined;
 
+    // Public API - 在CSRF中间件之前注册，避免CSRF验证
+    app.use('/api/users', usersPublicRouter);
+    app.use('/api', apiRouter);
+
     app.use(csrfSyncProtection.csrfSynchronisedProtection);
 } else {
     console.warn('\nCSRF protection is disabled. This will make your server vulnerable to CSRF attacks.\n');
@@ -219,9 +224,6 @@ app.get('/login', loginPageMiddleware);
 const webpackMiddleware = getWebpackServeMiddleware();
 app.use(webpackMiddleware);
 app.use(express.static(process.cwd() + '/public', {}));
-
-// Public API
-app.use('/api/users', usersPublicRouter);
 
 // Everything below this line requires authentication
 app.use(requireLoginMiddleware);
